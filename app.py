@@ -23,7 +23,9 @@ def get_gpu_stats():
 @app.route('/')
 def index():
     return render_template('index.html')
-
+@app.route('/monitor')
+def index():
+    return render_template('dashboard.html')
 @app.route('/stats')
 def stats():
     cpu_usage = psutil.cpu_percent(interval=0.5)
