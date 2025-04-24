@@ -15,32 +15,33 @@
 <div class="container py-4">
   <h3 class="text-center mb-4">🖥️ System Monitor Dashboard</h3>
 
+  <!-- CPU Usage -->
   <div class="mb-4">
     <div class="label-row"><span>CPU Usage</span><span id="cpu-text">--%</span></div>
     <div class="progress"><div id="cpu-bar" class="progress-bar bg-success" role="progressbar"></div></div>
   </div>
 
+  <!-- Memory Usage -->
   <div class="mb-4">
-    <div class="label-row">
-      <span>Memory Usage (<span id="mem-total">--</span> MB)</span>
-      <span id="mem-text">--%</span>
-    </div>
+    <div class="label-row"><span>Memory Usage</span><span id="mem-text">--%</span></div>
     <div class="progress"><div id="mem-bar" class="progress-bar bg-info" role="progressbar"></div></div>
+    <div class="text-end"><small><span id="mem-used">--</span> / <span id="mem-total">--</span> MB</small></div>
   </div>
 
+  <!-- GPU Usage -->
   <div class="mb-4">
     <div class="label-row"><span>GPU Usage</span><span id="gpu-text">--%</span></div>
     <div class="progress"><div id="gpu-bar" class="progress-bar bg-warning" role="progressbar"></div></div>
   </div>
 
+  <!-- GPU Memory Usage -->
   <div class="mb-4">
-    <div class="label-row">
-      <span>GPU Memory Usage (<span id="gpu-mem-total">--</span> MB)</span>
-      <span id="gpu-mem-text">--%</span>
-    </div>
+    <div class="label-row"><span>GPU Memory Usage</span><span id="gpu-mem-text">--%</span></div>
     <div class="progress"><div id="gpu-mem-bar" class="progress-bar bg-secondary" role="progressbar"></div></div>
+    <div class="text-end"><small><span id="gpu-mem-used">--</span> / <span id="gpu-mem-total">--</span> MB</small></div>
   </div>
 
+  <!-- Temperatures & Fans -->
   <div class="mb-2"><strong>CPU Temp:</strong> <span id="cpu-temp">-- °C</span></div>
   <div class="mb-2"><strong>CPU Fan Speed:</strong> <span id="cpu-fan">--</span></div>
   <div class="mb-2"><strong>GPU Temp:</strong> <span id="gpu-temp">-- °C</span></div>
@@ -63,17 +64,20 @@
       document.getElementById("mem-bar").textContent = data.memory + "%";
       document.getElementById("mem-text").textContent = data.memory + "%";
       document.getElementById("mem-total").textContent = data.memory_total;
+      document.getElementById("mem-used").textContent = Math.round(data.memory_total * data.memory / 100);
 
-      // GPU
+      // GPU Usage
       document.getElementById("gpu-bar").style.width = data.gpu + "%";
       document.getElementById("gpu-bar").textContent = data.gpu + "%";
       document.getElementById("gpu-text").textContent = data.gpu + "%";
 
       // GPU Memory
+      const gpuMemUsed = Math.round(data.gpu_memory_total * data.gpu_memory_usage / 100);
       document.getElementById("gpu-mem-bar").style.width = data.gpu_memory_usage.toFixed(1) + "%";
       document.getElementById("gpu-mem-bar").textContent = data.gpu_memory_usage.toFixed(1) + "%";
       document.getElementById("gpu-mem-text").textContent = data.gpu_memory_usage.toFixed(1) + "%";
       document.getElementById("gpu-mem-total").textContent = data.gpu_memory_total;
+      document.getElementById("gpu-mem-used").textContent = gpuMemUsed;
 
       // Temps and Fans
       document.getElementById("cpu-temp").textContent = data.cpu_temp + " °C";
