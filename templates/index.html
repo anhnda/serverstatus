@@ -2,50 +2,86 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Welcome to xaibk.org</title>
+  <title>System Dashboard – xaibk.org</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body {
-      background-color: #ffffff;
-      color: #212529;
-      font-family: "Segoe UI", sans-serif;
-    }
-    .hero {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      text-align: center;
-      padding: 2rem 1rem;
-    }
-    .hero h1 {
-      font-size: 3rem;
-      font-weight: bold;
-    }
-    .hero p {
-      font-size: 1.2rem;
-      margin-top: 0.5rem;
-    }
-    .brand {
-      color: #0d6efd;
-      font-weight: bold;
-    }
-    .slogan {
-      font-style: italic;
-      color: #6c757d;
-      margin-top: 0.5rem;
-    }
+    body { background: #f8f9fa; color: #212529; }
+    .server-card { background: white; border-radius: 0.5rem; padding: 1.5rem; box-shadow: 0 0 10px rgba(0,0,0,0.05); }
+    .label-row { display: flex; justify-content: space-between; font-size: 0.9rem; }
+    .progress { height: 1.25rem; }
+    .title { text-align: center; margin-bottom: 2rem; }
   </style>
 </head>
 <body>
-
-<div class="hero">
-  <h1>Welcome to <span class="brand">xaibk.org</span></h1>
-  <p>Powered by <strong>XAIGK Group</strong></p>
-  <p class="slogan">Just want to understand.</p>
+<div class="container py-4">
+  <h3 class="title">🖥️ System Monitor Dashboard – <strong>xaibk.org</strong></h3>
+  <div class="row g-4">
+    <!-- Server 1 -->
+    <div class="col-md-6">
+      <div class="server-card">
+        <h5 class="text-primary">xaibk.org</h5>
+        <div id="server1" class="monitor-block"></div>
+      </div>
+    </div>
+    <!-- Server 2 -->
+    <div class="col-md-6">
+      <div class="server-card">
+        <h5 class="text-success">s1w.xaibk.org</h5>
+        <div id="server2" class="monitor-block"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
+<script>
+  async function fetchAndRenderStats(apiUrl, containerId) {
+    try {
+      const res = await fetch(apiUrl);
+      const data = await res.json();
+
+      const memUsed = Math.round(data.memory_total * data.memory / 100);
+      const gpuMemUsed = Math.round(data.gpu_memory_total * data.gpu_memory_usage / 100);
+
+      const html = `
+        <div class="mb-3">
+          <div class="label-row"><span>CPU Usage</span><span>${data.cpu}%</span></div>
+          <div class="progress"><div class="progress-bar bg-success" style="width: ${data.cpu}%" role="progressbar">${data.cpu}%</div></div>
+        </div>
+        <div class="mb-3">
+          <div class="label-row"><span>Memory Usage</span><span>${data.memory}%</span></div>
+          <div class="progress"><div class="progress-bar bg-info" style="width: ${data.memory}%" role="progressbar">${data.memory}%</div></div>
+          <div class="text-end"><small>${memUsed} / ${data.memory_total} MB</small></div>
+        </div>
+        <div class="mb-3">
+          <div class="label-row"><span>GPU Usage</span><span>${data.gpu}%</span></div>
+          <div class="progress"><div class="progress-bar bg-warning" style="width: ${data.gpu}%" role="progressbar">${data.gpu}%</div></div>
+        </div>
+        <div class="mb-3">
+          <div class="label-row"><span>GPU Memory Usage</span><span>${data.gpu_memory_usage.toFixed(1)}%</span></div>
+          <div class="progress"><div class="progress-bar bg-secondary" style="width: ${data.gpu_memory_usage}%" role="progressbar">${data.gpu_memory_usage.toFixed(1)}%</div></div>
+          <div class="text-end"><small>${gpuMemUsed} / ${data.gpu_memory_total} MB</small></div>
+        </div>
+        <div class="mb-2"><strong>CPU Temp:</strong> ${data.cpu_temp} °C</div>
+        <div class="mb-2"><strong>CPU Fan:</strong> ${typeof data.cpu_fan === 'number' && data.cpu_fan > 0 ? data.cpu_fan + ' RPM' : data.cpu_fan}</div>
+        <div class="mb-2"><strong>GPU Temp:</strong> ${data.gpu_temp} °C</div>
+        <div class="mb-2"><strong>GPU Fan:</strong> ${data.gpu_fan > 0 ? data.gpu_fan + ' %' : 'Fan Off (Idle)'}</div>
+      `;
+
+      document.getElementById(containerId).innerHTML = html;
+    } catch (error) {
+      document.getElementById(containerId).innerHTML = `<p class="text-danger">Error fetching data from ${apiUrl}</p>`;
+      console.error("Error:", error);
+    }
+  }
+
+  function refreshStats() {
+    fetchAndRenderStats("https://xaibk.org/stats", "server1");
+    fetchAndRenderStats("https://s1w.xaibk.org/stats", "server2");
+  }
+
+  setInterval(refreshStats, 2000);
+  refreshStats();
+</script>
 </body>
 </html>
