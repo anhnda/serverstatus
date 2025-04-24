@@ -25,8 +25,11 @@ def stats():
     cpu_usage = psutil.cpu_percent(interval=0.5)
     memory = psutil.virtual_memory()
     mem_usage = memory.percent
-    cpu_temp = psutil.sensors_temperatures().get('coretemp', [{}])[0].get('current', 0)
-    fan_speed = psutil.sensors_fans().get('cpu_fan', [{}])[0].get('current', 0)
+    temps = psutil.sensors_temperatures()
+    cpu_temp = temps['coretemp'][0].current if 'coretemp' in temps and temps['coretemp'] else 0
+
+    fans = psutil.sensors_fans()
+    fan_speed = fans['cpu_fan'][0].current if 'cpu_fan' in fans and fans['cpu_fan'] else 0
     gpu_usage, gpu_fan = get_gpu_stats()
 
     return jsonify({
