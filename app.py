@@ -2,8 +2,10 @@ from flask import Flask, render_template, jsonify
 import psutil
 import subprocess
 
-app = Flask(__name__)
+from flask_cors import CORS
 
+app = Flask(__name__)
+CORS(app)  # allow all origins
 def get_gpu_stats():
     try:
         output = subprocess.check_output([
