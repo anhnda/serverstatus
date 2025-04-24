@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>System Monitor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background-color: #1e1e2f;
+      color: #fff;
+    }
+    .progress {
+      height: 1.5rem;
+    }
+    .label-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+<div class="container py-4">
+  <h3 class="text-center mb-4">📊 System Monitor Dashboard</h3>
+
+  <div class="mb-4">
+    <div class="label-row"><span>CPU Usage</span><span id="cpu-text">--%</span></div>
+    <div class="progress">
+      <div id="cpu-bar" class="progress-bar" role="progressbar"></div>
+    </div>
+  </div>
+
+  <div class="mb-4">
+    <div class="label-row"><span>Memory Usage</span><span id="mem-text">--%</span></div>
+    <div class="progress">
+      <div id="mem-bar" class="progress-bar bg-info" role="progressbar"></div>
+    </div>
+  </div>
+
+  <div class="mb-4">
+    <div class="label-row"><span>GPU Usage</span><span id="gpu-text">--%</span></div>
+    <div class="progress">
+      <div id="gpu-bar" class="progress-bar bg-warning" role="progressbar"></div>
+    </div>
+  </div>
+
+  <div class="mb-3"><strong>CPU Fan Speed:</strong> <span id="cpu-fan">-- RPM</span></div>
+  <div class="mb-3"><strong>CPU Temp:</strong> <span id="cpu-temp">-- °C</span></div>
+  <div class="mb-3"><strong>GPU Fan Speed:</strong> <span id="gpu-fan">-- %</span></div>
+</div>
+
+<script>
+  async function fetchStats() {
+    try {
+      const response = await fetch("/stats");
+      const data = await response.json();
+
+      document.getElementById("cpu-bar").style.width = data.cpu + "%";
+      document.getElementById("cpu-bar").textContent = data.cpu + "%";
+      document.getElementById("cpu-text").textContent = data.cpu + "%";
+
+      document.getElementById("mem-bar").style.width = data.memory + "%";
+      document.getElementById("mem-bar").textContent = data.memory + "%";
+      document.getElementById("mem-text").textContent = data.memory + "%";
+
+      document.getElementById("gpu-bar").style.width = data.gpu + "%";
+      document.getElementById("gpu-bar").textContent = data.gpu + "%";
+      document.getElementById("gpu-text").textContent = data.gpu + "%";
+
+      document.getElementById("cpu-fan").textContent = data.cpu_fan + " RPM";
+      document.getElementById("cpu-temp").textContent = data.cpu_temp + " °C";
+      document.getElementById("gpu-fan").textContent = data.gpu_fan + " %";
+    } catch (error) {
+      console.error("Failed to fetch stats:", error);
+    }
+  }
+
+  setInterval(fetchStats, 2000);
+  fetchStats();
+</script>
+</body>
+</html>
