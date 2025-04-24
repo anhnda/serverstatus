@@ -6,55 +6,45 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body {
-      background-color: #1e1e2f;
-      color: #fff;
-    }
-    .progress {
-      height: 1.5rem;
-    }
-    .label-row {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.9rem;
-    }
+    body { background-color: #1e1e2f; color: white; }
+    .progress { height: 1.5rem; }
+    .label-row { display: flex; justify-content: space-between; font-size: 0.9rem; }
   </style>
 </head>
 <body>
 <div class="container py-4">
-  <h3 class="text-center mb-4">📊 System Monitor Dashboard</h3>
+  <h3 class="text-center mb-4">🖥️ System Monitor Dashboard</h3>
 
   <div class="mb-4">
     <div class="label-row"><span>CPU Usage</span><span id="cpu-text">--%</span></div>
-    <div class="progress">
-      <div id="cpu-bar" class="progress-bar" role="progressbar"></div>
-    </div>
+    <div class="progress"><div id="cpu-bar" class="progress-bar" role="progressbar"></div></div>
   </div>
 
   <div class="mb-4">
     <div class="label-row"><span>Memory Usage</span><span id="mem-text">--%</span></div>
-    <div class="progress">
-      <div id="mem-bar" class="progress-bar bg-info" role="progressbar"></div>
-    </div>
+    <div class="progress"><div id="mem-bar" class="progress-bar bg-info" role="progressbar"></div></div>
   </div>
 
   <div class="mb-4">
     <div class="label-row"><span>GPU Usage</span><span id="gpu-text">--%</span></div>
-    <div class="progress">
-      <div id="gpu-bar" class="progress-bar bg-warning" role="progressbar"></div>
-    </div>
+    <div class="progress"><div id="gpu-bar" class="progress-bar bg-warning" role="progressbar"></div></div>
   </div>
 
-  <div class="mb-3"><strong>CPU Fan Speed:</strong> <span id="cpu-fan">-- RPM</span></div>
-  <div class="mb-3"><strong>CPU Temp:</strong> <span id="cpu-temp">-- °C</span></div>
-  <div class="mb-3"><strong>GPU Fan Speed:</strong> <span id="gpu-fan">-- %</span></div>
+  <div class="mb-2"><strong>CPU Temp:</strong> <span id="cpu-temp">-- °C</span></div>
+  <div class="mb-2"><strong>CPU Fan Speed:</strong> <span id="cpu-fan">-- RPM</span></div>
+  <div class="mb-2"><strong>GPU Temp:</strong> <span id="gpu-temp">-- °C</span></div>
+  <div class="mb-2"><strong>GPU Fan Speed:</strong> <span id="gpu-fan">-- %</span></div>
+
+  <div id="gpu-cooler-notice" class="alert alert-info d-none mt-3" role="alert">
+    🧊 GPU is currently cooler than CPU — this is normal when GPU is idle!
+  </div>
 </div>
 
 <script>
   async function fetchStats() {
     try {
-      const response = await fetch("/stats");
-      const data = await response.json();
+      const res = await fetch("/stats");
+      const data = await res.json();
 
       document.getElementById("cpu-bar").style.width = data.cpu + "%";
       document.getElementById("cpu-bar").textContent = data.cpu + "%";
@@ -68,11 +58,19 @@
       document.getElementById("gpu-bar").textContent = data.gpu + "%";
       document.getElementById("gpu-text").textContent = data.gpu + "%";
 
-      document.getElementById("cpu-fan").textContent = data.cpu_fan + " RPM";
       document.getElementById("cpu-temp").textContent = data.cpu_temp + " °C";
-      document.getElementById("gpu-fan").textContent = data.gpu_fan + " %";
-    } catch (error) {
-      console.error("Failed to fetch stats:", error);
+      document.getElementById("cpu-fan").textContent = data.cpu_fan > 0 ? data.cpu_fan + " RPM" : "Not Available";
+      document.getElementById("gpu-temp").textContent = data.gpu_temp + " °C";
+      document.getElementById("gpu-fan").textContent = data.gpu_fan > 0 ? data.gpu_fan + " %" : "Not Available";
+
+      const notice = document.getElementById("gpu-cooler-notice");
+      if (data.gpu_temp < data.cpu_temp) {
+        notice.classList.remove("d-none");
+      } else {
+        notice.classList.add("d-none");
+      }
+    } catch (err) {
+      console.error("Error fetching stats:", err);
     }
   }
 
