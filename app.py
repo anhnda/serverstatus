@@ -24,7 +24,7 @@ def get_gpu_stats():
 def index():
     return render_template('index.html')
 @app.route('/monitor')
-def index():
+def monitor():
     return render_template('dashboard.html')
 @app.route('/stats')
 def stats():
