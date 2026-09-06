@@ -1,0 +1,1347 @@
+{
+  "name": "DigestPapers Multi-Source",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 6
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -260,
+        400
+      ],
+      "id": "5269a301-5b44-4794-8983-05b66ea32685",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT (COALESCE((SELECT jsonb_object_agg(key, value) FROM config), '{}'::jsonb)\n     || COALESCE((SELECT jsonb_object_agg(key, to_jsonb(value)) FROM secrets), '{}'::jsonb)\n       ) AS cfg;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -40,
+        400
+      ],
+      "id": "c0f1a2b3-load-cfg-db-0001",
+      "name": "Load Config (DB)",
+      "credentials": {
+        "postgres": {
+          "id": "LvTeoXHnDyhIEnZe",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===== CONFIG FROM DB (table: config) =====\n// Reads the aggregated config object produced by the 'Load Config (DB)' node.\n// Original hardcoded values now live in Postgres (see schema.sql), editable\n// via pconfig.html. Downstream nodes read $('Load Config').first().json.* as before.\nconst cfg = $input.first().json.cfg || {};\n\n// derive openreviewVenues from orConfs x [thisYear, lastYear] (as the old node did)\nconst _y = new Date().getFullYear();\nconst _confs = cfg.orConfs || [\"ICML\", \"ICLR\", \"NeurIPS\"];\nconst openreviewVenues = [];\nfor (const y of [_y, _y - 1]) {\n  for (const c of _confs) openreviewVenues.push(`${c}.cc/${y}/Conference`);\n}\n\nreturn [{ json: {\n  keywordQuery:      cfg.keywordQuery,\n  fields:            cfg.fields,\n  KEYWORD_MIN_SCORE: cfg.KEYWORD_MIN_SCORE,\n  AUTHOR_MIN_SCORE:  cfg.AUTHOR_MIN_SCORE,\n  daysBack:          cfg.daysBack,\n  venueWhitelist:    cfg.venueWhitelist,\n  authors:           cfg.authors,\n  openreviewVenues,\n  // secrets (read live from DB, used by SS/LLM/Discord nodes)\n  SS_API_KEY:      cfg.SS_API_KEY,\n  LLM_PROVIDER:    cfg.LLM_PROVIDER,\n  LLM_BASE_URL:    cfg.LLM_BASE_URL,\n  LLM_API_KEY:     cfg.LLM_API_KEY,\n  LLM_MODEL:       cfg.LLM_MODEL,\n  DISCORD_WEBHOOK: cfg.DISCORD_WEBHOOK\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        400
+      ],
+      "id": "35050ccf-020f-488d-a483-c3662415d2c4",
+      "name": "Load Config"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $json.authors.map(a => ({ json: {\n  name: (a.name||'').trim(),\n  topic: (a.topic||'').trim() || 'other',\n  arxiv_name: (a.arxiv_name||'').trim() || (a.name||'').trim().replace(/\\s+/g,'_'),\n  ss_id: (a.ss_id||'').trim(),\n  _cfg: {\n    keywordQuery:$json.keywordQuery, fields:$json.fields,\n    KEYWORD_MIN_SCORE:$json.KEYWORD_MIN_SCORE, AUTHOR_MIN_SCORE:$json.AUTHOR_MIN_SCORE,\n    daysBack:$json.daysBack, venueWhitelist:$json.venueWhitelist,\n    openreviewVenues:$json.openreviewVenues }\n} }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        700
+      ],
+      "id": "a17d4e79-f27a-4102-8c54-7b5dc231cd3f",
+      "name": "Split Authors"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COALESCE((SELECT ss_id FROM author_cache WHERE name = $1), '') AS cache_ss_id;",
+        "options": {
+          "queryReplacement": "={{ $json.name }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        660,
+        700
+      ],
+      "id": "503c933f-b983-4e6c-8c14-f2b430189315",
+      "name": "Author Cache Lookup",
+      "credentials": {
+        "postgres": {
+          "id": "LvTeoXHnDyhIEnZe",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Manual ss_id from config wins; else use cache; else '' (triggers resolver).\nconst a = $('Split Authors').item.json;\nconst cache = ($json.cache_ss_id || '').trim();\nconst manual = (a.ss_id || '').trim();\nconst ss_id = manual || cache || '';\nreturn [{ json: { name:a.name, topic:a.topic, arxiv_name:a.arxiv_name, ss_id } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        700
+      ],
+      "id": "b1c2d3e4-resolve-ssid-0001",
+      "name": "Resolve ss_id"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "42cd336b-c6da-4d37-a8af-c4f25015c32f",
+              "leftValue": "={{ ($json.ss_id || '').length > 0 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1280,
+        700
+      ],
+      "id": "a90a6efc-49b4-4dc3-8186-8b55a14f45b0",
+      "name": "Need Resolve?"
+    },
+    {
+      "parameters": {
+        "url": "https://api.semanticscholar.org/graph/v1/author/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.name }}"
+            },
+            {
+              "name": "fields",
+              "value": "name,paperCount,hIndex"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2500
+            }
+          }
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $('Load Config').first().json.SS_API_KEY }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1320,
+        620
+      ],
+      "id": "c450083d-bb53-409c-9a05-f77874739e90",
+      "name": "Resolve Author ID",
+      "retryOnFail": true,
+      "waitBetweenTries": 8000,
+      "onError": "continueRegularOutput",
+      "maxTries": 4
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst author = $('Need Resolve?').item.json;\nconst data = $json.data || [];\n// heuristic: highest paperCount match\nlet best = null;\nfor (const c of data) { if (!best || (c.paperCount||0) > (best.paperCount||0)) best = c; }\nconst ss_id = best ? best.authorId : \"\";\nreturn [{ json: { ...author, ss_id, _resolved:true } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        620
+      ],
+      "id": "d2243825-00ce-4486-a67c-dad56619bd2e",
+      "name": "Pick + Cache Author"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO author_cache(name, ss_id) VALUES($1,$2) ON CONFLICT (name) DO UPDATE SET ss_id=EXCLUDED.ss_id;",
+        "options": {
+          "queryReplacement": "={{ $json.name }},{{ $json.ss_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1760,
+        620
+      ],
+      "id": "eb4a7a26-54ce-48d1-a27b-68697f04a013",
+      "name": "Upsert Author Cache",
+      "credentials": {
+        "postgres": {
+          "id": "LvTeoXHnDyhIEnZe",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "numberInputs": 2,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1980,
+        700
+      ],
+      "id": "e6f1be84-0527-48e8-836c-7981a1af1dd4",
+      "name": "Merge Resolved"
+    },
+    {
+      "parameters": {
+        "url": "http://export.arxiv.org/api/query",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "search_query",
+              "value": "cat:cs.LG AND (abs:\"integrated gradients\" OR abs:\"feature attribution\" OR abs:\"post-training quantization\" OR abs:\"model quantization\")"
+            },
+            {
+              "name": "start",
+              "value": "0"
+            },
+            {
+              "name": "max_results",
+              "value": "40"
+            },
+            {
+              "name": "sortBy",
+              "value": "submittedDate"
+            },
+            {
+              "name": "sortOrder",
+              "value": "descending"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        440,
+        0
+      ],
+      "id": "0be800ba-cc36-44d7-8ae2-82f158c6b749",
+      "name": "arXiv Keyword",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "// parse Atom XML from arXiv into normalized papers\nconst xml = $input.first().json.data || $input.first().json.body || $input.first().binary || \"\";\nconst raw = typeof xml === \"string\" ? xml : ($input.first().json.data || \"\");\nconst text = raw;\nconst entries = text.split(\"<entry>\").slice(1);\nconst out = [];\nfor (const e of entries) {\n  const g = (tag) => { const m = e.match(new RegExp(\"<\"+tag+\"[^>]*>([\\\\s\\\\S]*?)</\"+tag+\">\")); return m ? m[1].trim() : \"\"; };\n  const idUrl = g(\"id\");\n  const m = idUrl.match(/abs\\/([^v]+)(v\\d+)?/);\n  const arxiv = m ? m[1] : null;\n  const doiM = e.match(/<arxiv:doi[^>]*>([\\s\\S]*?)<\\/arxiv:doi>/);\n  const doi = doiM ? doiM[1].trim() : null;\n  const title = g(\"title\").replace(/\\s+/g,\" \");\n  const abstract = g(\"summary\").replace(/\\s+/g,\" \");\n  const pub = g(\"published\").slice(0,10);\n  const names = [...e.matchAll(/<name>([\\s\\S]*?)<\\/name>/g)].map(x=>x[1].trim());\n  const pdf = arxiv ? `https://arxiv.org/pdf/${arxiv}` : null;\n  const dedup_key = arxiv ? `arxiv:${arxiv}` : (doi ? `doi:${doi}` : `arxivurl:${idUrl}`);\n  out.push({ json: {\n    dedup_key, arxiv_id:arxiv, doi, semantic_scholar_id:null,\n    title, authors:names.join(\", \"), abstract, url:idUrl, pdf_url:pdf,\n    published_at:pub, venue:\"arXiv\", source:\"arxiv_keyword\", min_score:7\n  }});\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ],
+      "id": "9962d5ed-acfd-4820-a260-58b034b0db32",
+      "name": "Norm arXiv Keyword"
+    },
+    {
+      "parameters": {
+        "url": "https://api.semanticscholar.org/graph/v1/paper/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $('Load Config').first().json.keywordQuery }}"
+            },
+            {
+              "name": "fields",
+              "value": "={{ $('Load Config').first().json.fields }}"
+            },
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2500
+            }
+          }
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $('Load Config').first().json.SS_API_KEY }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        440,
+        150
+      ],
+      "id": "74884512-4a47-4127-b257-488b11cba490",
+      "name": "SS Keyword",
+      "retryOnFail": true,
+      "waitBetweenTries": 8000,
+      "onError": "continueRegularOutput",
+      "maxTries": 4
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.first().json.data || [];\nreturn items.map(p => {\n  const arxiv = p.externalIds?.ArXiv || null;\n  const doi = p.externalIds?.DOI || null;\n  const dedup_key = arxiv ? `arxiv:${arxiv}` : doi ? `doi:${doi}` : `ss:${p.paperId}`;\n  return { json: {\n    dedup_key, arxiv_id:arxiv, doi, semantic_scholar_id:p.paperId,\n    title:p.title, authors:(p.authors||[]).map(a=>a.name).join(\", \"),\n    abstract:p.abstract||p.tldr?.text||\"\", url:p.url, pdf_url:p.openAccessPdf?.url||null,\n    published_at:p.publicationDate, venue:p.venue||\"\", source:\"ss_keyword\", min_score:7\n  }};\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        150
+      ],
+      "id": "732244da-41eb-4cdb-b5eb-1e323d33e60a",
+      "name": "Norm SS Keyword"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.semanticscholar.org/graph/v1/author/{{ $json.ss_id }}/papers",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "={{ $('Load Config').first().json.fields }}"
+            },
+            {
+              "name": "limit",
+              "value": "30"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2500
+            }
+          }
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $('Load Config').first().json.SS_API_KEY }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2200,
+        620
+      ],
+      "id": "d9e8e138-388c-43c5-ac62-07e46711cb9f",
+      "name": "SS Author Papers",
+      "retryOnFail": true,
+      "waitBetweenTries": 8000,
+      "onError": "continueRegularOutput",
+      "maxTries": 4
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "0ed5d0e5-d33a-415f-bb6a-82ec42be49a0",
+              "leftValue": "={{ ($json.ss_id || '').length > 0 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2200,
+        700
+      ],
+      "id": "53c65249-4c81-4db4-aa25-3ee6d9d2fa51",
+      "name": "Has SS ID?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const author = $('Has SS ID?').item.json;\nconst items = $json.data || [];\nconst minScore = $('Load Config').first().json.AUTHOR_MIN_SCORE;\nreturn items.filter(p=>p.title).map(p => {\n  const arxiv = p.externalIds?.ArXiv || null;\n  const doi = p.externalIds?.DOI || null;\n  const dedup_key = arxiv ? `arxiv:${arxiv}` : doi ? `doi:${doi}` : `ss:${p.paperId}`;\n  return { json: {\n    dedup_key, arxiv_id:arxiv, doi, semantic_scholar_id:p.paperId,\n    title:p.title, authors:(p.authors||[]).map(a=>a.name).join(\", \"),\n    abstract:p.abstract||p.tldr?.text||\"\", url:p.url, pdf_url:p.openAccessPdf?.url||null,\n    published_at:p.publicationDate, venue:p.venue||\"\",\n    source:`ss_author:${author.name}`, min_score:minScore\n  }};\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        620
+      ],
+      "id": "f56e2fb8-3f2a-4f00-a7ae-395ce7bce2b0",
+      "name": "Norm SS Author"
+    },
+    {
+      "parameters": {
+        "url": "http://export.arxiv.org/api/query",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "search_query",
+              "value": "=au:{{ $json.arxiv_name }}"
+            },
+            {
+              "name": "start",
+              "value": "0"
+            },
+            {
+              "name": "max_results",
+              "value": "20"
+            },
+            {
+              "name": "sortBy",
+              "value": "submittedDate"
+            },
+            {
+              "name": "sortOrder",
+              "value": "descending"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 3100
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2200,
+        820
+      ],
+      "id": "10373e4b-305f-42e9-b5c9-73537b14139f",
+      "name": "arXiv Author",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "const author = $('arXiv Author').item.json;\nconst text = $json.data || \"\";\nconst minScore = $('Load Config').first().json.AUTHOR_MIN_SCORE;\nconst entries = text.split(\"<entry>\").slice(1);\nconst out = [];\nfor (const e of entries) {\n  const g=(t)=>{const m=e.match(new RegExp(\"<\"+t+\"[^>]*>([\\\\s\\\\S]*?)</\"+t+\">\"));return m?m[1].trim():\"\";};\n  const idUrl=g(\"id\"); const m=idUrl.match(/abs\\/([^v]+)(v\\d+)?/); const arxiv=m?m[1]:null;\n  const title=g(\"title\").replace(/\\s+/g,\" \"); const abstract=g(\"summary\").replace(/\\s+/g,\" \");\n  const pub=g(\"published\").slice(0,10);\n  const names=[...e.matchAll(/<name>([\\s\\S]*?)<\\/name>/g)].map(x=>x[1].trim());\n  const dedup_key = arxiv?`arxiv:${arxiv}`:`arxivurl:${idUrl}`;\n  out.push({json:{dedup_key,arxiv_id:arxiv,doi:null,semantic_scholar_id:null,\n    title,authors:names.join(\", \"),abstract,url:idUrl,\n    pdf_url:arxiv?`https://arxiv.org/pdf/${arxiv}`:null,published_at:pub,\n    venue:\"arXiv\",source:`arxiv_author:${author.name}`,min_score:minScore}});\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        820
+      ],
+      "id": "ab1ecee7-cb65-4e07-b436-af642a8d7e7a",
+      "name": "Norm arXiv Author"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $json.openreviewVenues.map(v => ({ json: { venue_id: v } }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ],
+      "id": "760585b2-f367-43e5-889a-6fb249340887",
+      "name": "Split OR Venues"
+    },
+    {
+      "parameters": {
+        "url": "https://api2.openreview.net/notes",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "content.venueid",
+              "value": "={{ $json.venue_id }}"
+            },
+            {
+              "name": "limit",
+              "value": "50"
+            },
+            {
+              "name": "sort",
+              "value": "cdate:desc"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1500
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        660,
+        300
+      ],
+      "id": "32adf884-d8b1-44da-a145-2ea27018d2d1",
+      "name": "OpenReview Notes",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "const venue = $('OpenReview Notes').item.json.venue_id || \"\";\nconst notes = $json.notes || [];\nconst kw = /(integrated gradient|feature attribution|explainab|saliency|quantiz|low-bit|efficient inference|compression)/i;\nreturn notes.filter(n=>{\n  const c=n.content||{};\n  const title=(c.title?.value)||c.title||\"\";\n  const abs=(c.abstract?.value)||c.abstract||\"\";\n  return kw.test(title+\" \"+abs);\n}).map(n=>{\n  const c=n.content||{};\n  const title=(c.title?.value)||c.title||\"\";\n  const abs=(c.abstract?.value)||c.abstract||\"\";\n  const authors=((c.authors?.value)||c.authors||[]);\n  const fwd = c._bibtex?.value || \"\";\n  const doiM = fwd.match(/10\\.\\d{4,}\\/[^\\s\"}]+/); const doi=doiM?doiM[0]:null;\n  return { json:{\n    dedup_key:`openreview:${n.id}`, arxiv_id:null, doi, semantic_scholar_id:null,\n    title, authors:Array.isArray(authors)?authors.join(\", \"):String(authors),\n    abstract:abs, url:`https://openreview.net/forum?id=${n.id}`, pdf_url:`https://openreview.net/pdf?id=${n.id}`,\n    published_at:new Date(n.cdate||Date.now()).toISOString().slice(0,10),\n    venue:venue.split(\"/\")[0], source:\"openreview\", min_score:7\n  }};\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ],
+      "id": "a28fe80c-7c14-41df-8ebd-87a896097525",
+      "name": "Norm OpenReview"
+    },
+    {
+      "parameters": {
+        "numberInputs": 5,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1200,
+        300
+      ],
+      "id": "1f885b3e-5630-407f-9a55-09e365fbd86b",
+      "name": "Merge Sources"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all().map(i=>i.json);\nconst map = new Map();\nfor (const p of items) {\n  const k = p.dedup_key;\n  const cur = map.get(k);\n  if (!cur) { map.set(k,p); continue; }\n  // keep the one with the longer abstract; tie-break: prefer one with pdf_url\n  const a=(p.abstract||\"\").length, b=(cur.abstract||\"\").length;\n  if (a>b || (a===b && p.pdf_url && !cur.pdf_url)) {\n    // preserve richest ids by merging\n    map.set(k, { ...cur, ...p,\n      arxiv_id:p.arxiv_id||cur.arxiv_id, doi:p.doi||cur.doi,\n      semantic_scholar_id:p.semantic_scholar_id||cur.semantic_scholar_id,\n      pdf_url:p.pdf_url||cur.pdf_url,\n      source: cur.source+\"+\"+p.source,\n      min_score: Math.min(p.min_score, cur.min_score) });  // if followed-author on either side, use lower bar\n  } else {\n    map.set(k, { ...cur, source: cur.source+\"+\"+p.source,\n      min_score: Math.min(p.min_score, cur.min_score) });\n  }\n}\n// tag freshness instead of dropping: papers with a valid in-window date are\n// 'fresh'; papers missing a date (or older) are kept but ranked last, so they\n// only fill a topic when there aren't enough fresh papers.\nconst daysBack = $('Load Config').first().json.daysBack;\nconst cutoff = new Date(Date.now() - daysBack*864e5);\nreturn [...map.values()].map(p => {\n  const d = p.published_at ? new Date(p.published_at) : null;\n  const _fresh = !!(d && !isNaN(d) && d >= cutoff);\n  return { json: { ...p, _fresh } };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1420,
+        300
+      ],
+      "id": "5f5278d2-0f02-406f-b2d7-079e10859939",
+      "name": "Dedup In Batch"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT $1 AS dedup_key, EXISTS(SELECT 1 FROM papers WHERE dedup_key = $1) AS already_seen;",
+        "options": {
+          "queryReplacement": "={{ $json.dedup_key }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1640,
+        300
+      ],
+      "id": "2dec78aa-dced-446c-a8b3-21a5e5c4d2bc",
+      "name": "Dedup Check",
+      "credentials": {
+        "postgres": {
+          "id": "LvTeoXHnDyhIEnZe",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1860,
+        300
+      ],
+      "id": "2a78c43b-05dd-4145-835a-b51abb54b61c",
+      "name": "Merge Dedup Flag"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cc1b7d37-aa97-4744-b0ea-1ce43dcb8215",
+              "leftValue": "={{ $json.already_seen }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2080,
+        300
+      ],
+      "id": "07ba1aa2-fc35-48cd-90b4-848114625fc0",
+      "name": "Filter New Papers"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item=>{\n  const p=item.json;\n  const prompt = `Title: ${p.title}\\nVenue: ${p.venue}\\nAbstract: ${p.abstract}`;\n  return { json: { ...p, prompt } };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2300,
+        300
+      ],
+      "id": "7fcfa481-b7b3-4626-810f-60f8d0957b1c",
+      "name": "Build Filter Prompt"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Load Config').first().json.LLM_BASE_URL }}/chat/completions",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: $('Load Config').first().json.LLM_MODEL,\n  messages: [\n    { role: \"system\", content: \"Bạn là bộ lọc độ liên quan cho hai chủ đề: (1) explainable AI / integrated gradients / feature attribution; (2) model quantization / post-training quantization / neural network efficiency. Chỉ trả JSON thuần không markdown: {\\\"relevance\\\": 0-10, \\\"topic\\\": \\\"quant\\\"|\\\"xai\\\"|\\\"other\\\", \\\"reason\\\": \\\"ngắn gọn\\\", \\\"should_read_full_paper\\\": true/false}. topic=quant cho quantization/compression/efficient inference; topic=xai cho explainability/feature attribution/interpretability; other nếu không rõ.\" },\n    { role: \"user\", content: $json.prompt }\n  ],\n  response_format: { type: \"json_object\" },\n  temperature: 0.2\n}) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Load Config').first().json.LLM_API_KEY }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2520,
+        300
+      ],
+      "id": "c62ca24f-be23-46dc-aa2c-e18e26882166",
+      "name": "LLM Relevance Filter",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "const papers = $('Build Filter Prompt').all();\nreturn $input.all().map((item,i)=>{\n  const paper = papers[i].json;\n  let parsed={relevance:0,topic:\"other\",reason:\"\",should_read_full_paper:false};\n  try { parsed=JSON.parse(item.json.choices[0].message.content); }\n  catch(e){ parsed.reason=\"parse error\"; }\n  return { json:{ ...paper, relevance_score:parsed.relevance,\n    reason_relevant:parsed.reason, should_read:parsed.should_read_full_paper, topic:parsed.topic||\"other\" }};\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2740,
+        300
+      ],
+      "id": "673c4b52-903d-4ee2-bd0c-82ac8fd7f406",
+      "name": "Parse Relevance"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "72bb9627-0750-4f4a-8d78-57e63540aacd",
+              "leftValue": "={{ $json.relevance_score }}",
+              "rightValue": "={{ $json.min_score }}",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2960,
+        300
+      ],
+      "id": "716f1c58-f97d-4433-bcd1-120c14745da8",
+      "name": "Filter By Score"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Load Config').first().json.LLM_BASE_URL }}/chat/completions",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  model: $('Load Config').first().json.LLM_MODEL,\n  messages: [\n    { role: \"system\", content: \"You are a research analyst. Read the paper and return a concise summary in English with: 1) TL;DR (max 3 sentences) 2) Problem 3) Main idea 4) Method 5) Key results 6) What's new 7) Limitations 8) Why it matters for explainable AI / integrated gradients or model quantization / neural network efficiency. Only state what is supported by the paper.\" },\n    { role: \"user\", content: \"Title: \" + $json.title + \"\\nAbstract: \" + $json.abstract }\n  ],\n  temperature: 0.3\n} }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Load Config').first().json.LLM_API_KEY }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        3180,
+        300
+      ],
+      "id": "a25479b7-57be-4311-be73-e83d44a9c853",
+      "name": "LLM Summary",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "const papers = $('Select Top 5 Per Topic').all();\nfunction q(v){ // SQL string literal or NULL\n  if(v===null||v===undefined||v===\"\") return \"NULL\";\n  return \"'\" + String(v).replace(/'/g,\"''\") + \"'\";\n}\nfunction num(v){ return (v===null||v===undefined||v===\"\") ? \"NULL\" : Number(v); }\nfunction dt(v){ // published_at -> date or NULL; only accept YYYY-MM-DD-ish\n  if(!v) return \"NULL\";\n  const m=String(v).match(/^\\d{4}-\\d{2}-\\d{2}/);\n  return m ? \"'\"+m[0]+\"'\" : \"NULL\";\n}\nreturn $input.all().map((item,i)=>{\n  const paper=papers[i].json;\n  let summary=\"\";\n  try{ summary=item.json.choices[0].message.content; }catch(e){ summary=\"(không tóm tắt được)\"; }\n  const cols=[\n    q(paper.dedup_key), q(paper.arxiv_id), q(paper.doi), q(paper.semantic_scholar_id),\n    q(paper.title), q(paper.authors), q(paper.abstract), q(paper.url), q(paper.pdf_url),\n    dt(paper.published_at), q(paper.venue), num(paper.relevance_score),\n    q(summary), q(paper.reason_relevant), q(paper.source)\n  ].join(\", \");\n  const sql = `INSERT INTO papers\n  (dedup_key, arxiv_id, doi, semantic_scholar_id, title, authors, abstract, url, pdf_url, published_at, venue, relevance_score, summary, reason_relevant, source, status)\nVALUES (${cols}, 'new')\nON CONFLICT (dedup_key) DO NOTHING;`;\n  return { json: { ...paper, summary, _sql: sql } };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3400,
+        300
+      ],
+      "id": "1a1b61df-8796-4366-976f-31272ce27ed0",
+      "name": "Parse Summary"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json._sql }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        3620,
+        300
+      ],
+      "id": "b1c59780-b3f9-4f3c-a1c8-cffe690a5905",
+      "name": "Insert Papers",
+      "credentials": {
+        "postgres": {
+          "id": "LvTeoXHnDyhIEnZe",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const papers = $('Parse Summary').all().map(i=>i.json);\nconst isAuthor = p => (p.source||\"\").includes(\"author\");\nconst bucket = p => { const t=(p.topic||\"other\").toLowerCase(); return (t===\"quant\"||t===\"xai\")?t:\"other\"; };\nconst groups = { quant:[], xai:[] };\nfor (const p of papers){ const b=bucket(p); if(groups[b]) groups[b].push(p); }\nconst sections=[{label:\"⚙️ QUANTIZATION\",items:groups.quant},{label:\"🔍 EXPLAINABLE AI\",items:groups.xai}];\nconst out=[];\nfor(const sec of sections){\n  if(!sec.items.length) continue;\n  out.push({json:{content:`**━━━ ${sec.label} ━━━**`}});\n  sec.items.forEach((p,i)=>{\n    const tag=isAuthor(p)?\" 👤follow\":\"\";\n    let content=`📄 **${i+1}. ${p.title}** (score: ${p.relevance_score}${tag})\\n`;\n    content+=`🏛️ ${p.venue} · 🔗 ${p.url}\\n\\n${p.summary||'(no summary)'}`;\n    if(content.length>1900) content=content.slice(0,1900)+\"…\";\n    out.push({json:{content}});\n  });\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3840,
+        300
+      ],
+      "id": "a83250ee-abcb-40d2-8a4b-5d20908aa01c",
+      "name": "Build Discord Messages"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Load Config').first().json.DISCORD_WEBHOOK }}",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "={{ $json.content }}"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1200
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        4060,
+        300
+      ],
+      "id": "21af2654-30b1-4ac3-bf21-1c43a1336c89",
+      "name": "Send Discord"
+    },
+    {
+      "parameters": {
+        "jsCode": "// cut to top 5 per topic BEFORE summarizing (saves tokens; DB stores only these)\nconst items = $input.all().map(i=>i.json);\nconst isAuthor = p => (p.source||\"\").includes(\"author\");\nconst bucket = p => { const t=(p.topic||\"other\").toLowerCase(); return (t===\"quant\"||t===\"xai\")?t:\"other\"; };\nconst groups = { quant:[], xai:[] };\nfor (const p of items){ const b=bucket(p); if(groups[b]) groups[b].push(p); }\nfunction pick5(arr){\n  return arr.sort((a,b)=>{\n    // 1) fresh (valid in-window date) beats stale/undated\n    const af=a._fresh?0:1, bf=b._fresh?0:1;\n    if(af!==bf) return af-bf;\n    // 2) followed-author beats keyword hit\n    const ap=isAuthor(a)?0:1, bp=isAuthor(b)?0:1;\n    if(ap!==bp) return ap-bp;\n    // 3) higher relevance score\n    return (b.relevance_score||0)-(a.relevance_score||0);\n  }).slice(0,5);\n}\nreturn [...pick5(groups.quant), ...pick5(groups.xai)].map(json=>({json}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3070,
+        300
+      ],
+      "id": "23eb6470-0657-4841-b646-6b8bf72a1874",
+      "name": "Select Top 5 Per Topic"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Load Config (DB)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Config": {
+      "main": [
+        [
+          {
+            "node": "Split Authors",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "arXiv Keyword",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "SS Keyword",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Split OR Venues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Authors": {
+      "main": [
+        [
+          {
+            "node": "Author Cache Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Author Cache Lookup": {
+      "main": [
+        [
+          {
+            "node": "Resolve ss_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Need Resolve?": {
+      "main": [
+        [
+          {
+            "node": "Resolve Author ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge Resolved",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Resolve Author ID": {
+      "main": [
+        [
+          {
+            "node": "Pick + Cache Author",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick + Cache Author": {
+      "main": [
+        [
+          {
+            "node": "Upsert Author Cache",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Author Cache": {
+      "main": [
+        [
+          {
+            "node": "Merge Resolved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "arXiv Keyword": {
+      "main": [
+        [
+          {
+            "node": "Norm arXiv Keyword",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SS Keyword": {
+      "main": [
+        [
+          {
+            "node": "Norm SS Keyword",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Resolved": {
+      "main": [
+        [
+          {
+            "node": "Has SS ID?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "arXiv Author",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has SS ID?": {
+      "main": [
+        [
+          {
+            "node": "SS Author Papers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SS Author Papers": {
+      "main": [
+        [
+          {
+            "node": "Norm SS Author",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "arXiv Author": {
+      "main": [
+        [
+          {
+            "node": "Norm arXiv Author",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split OR Venues": {
+      "main": [
+        [
+          {
+            "node": "OpenReview Notes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenReview Notes": {
+      "main": [
+        [
+          {
+            "node": "Norm OpenReview",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Norm arXiv Keyword": {
+      "main": [
+        [
+          {
+            "node": "Merge Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Norm SS Keyword": {
+      "main": [
+        [
+          {
+            "node": "Merge Sources",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Norm SS Author": {
+      "main": [
+        [
+          {
+            "node": "Merge Sources",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Norm arXiv Author": {
+      "main": [
+        [
+          {
+            "node": "Merge Sources",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Norm OpenReview": {
+      "main": [
+        [
+          {
+            "node": "Merge Sources",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "Merge Sources": {
+      "main": [
+        [
+          {
+            "node": "Dedup In Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup In Batch": {
+      "main": [
+        [
+          {
+            "node": "Dedup Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Dedup Flag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup Check": {
+      "main": [
+        [
+          {
+            "node": "Merge Dedup Flag",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Dedup Flag": {
+      "main": [
+        [
+          {
+            "node": "Filter New Papers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter New Papers": {
+      "main": [
+        [
+          {
+            "node": "Build Filter Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Filter Prompt": {
+      "main": [
+        [
+          {
+            "node": "LLM Relevance Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Relevance Filter": {
+      "main": [
+        [
+          {
+            "node": "Parse Relevance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Relevance": {
+      "main": [
+        [
+          {
+            "node": "Filter By Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter By Score": {
+      "main": [
+        [
+          {
+            "node": "Select Top 5 Per Topic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Summary": {
+      "main": [
+        [
+          {
+            "node": "Parse Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Summary": {
+      "main": [
+        [
+          {
+            "node": "Insert Papers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Papers": {
+      "main": [
+        [
+          {
+            "node": "Build Discord Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Discord Messages": {
+      "main": [
+        [
+          {
+            "node": "Send Discord",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Top 5 Per Topic": {
+      "main": [
+        [
+          {
+            "node": "LLM Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Config (DB)": {
+      "main": [
+        [
+          {
+            "node": "Load Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve ss_id": {
+      "main": [
+        [
+          {
+            "node": "Need Resolve?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "active": false,
+  "versionId": "aaafc74a-c6e1-4b73-96da-2dd3f2458ab0",
+  "meta": {},
+  "id": "7c70fbd1-76ec-4fc3-a14e-2bcb220d9324",
+  "tags": []
+}

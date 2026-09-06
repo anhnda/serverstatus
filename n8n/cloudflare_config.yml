@@ -1,0 +1,12 @@
+tunnel:  tunnels1
+credentials-file: /home/anhnda/.cloudflared/....json
+protocol: http2
+transport-protocol: http2
+ingress:
+  - hostname: s1.xaibk.org
+    service: ssh://localhost:22
+  - hostname: s1w.xaibk.org
+    service: http://localhost:5000
+  - hostname: n8n.xaibk.org
+    service: http://localhost:5678
+  - service: http_status:404
