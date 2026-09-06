@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, send_from_directory
 import psutil
 import subprocess
 
@@ -21,7 +21,16 @@ def get_gpu_stats():
         return int(usage), int(fan), int(temp), int(mem_total), int(mem_used)
     except Exception:
         return 0, 0, 0, 0, 0
+from pathlib import Path
+DOWNLOAD_FOLDER = Path(app.root_path) / "static" / "downloads"
 
+@app.route("/download/<filename>")
+def download_file(filename):
+    return send_from_directory(
+        DOWNLOAD_FOLDER,
+        filename,
+        as_attachment=True
+    )
 @app.route('/')
 def index():
     return render_template('index.html')
