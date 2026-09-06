@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DigestPapers — Config</title>
+<style>
+  :root {
+    --bg: #12141a;
+    --panel: #1a1d26;
+    --panel-2: #21252f;
+    --line: #2c313d;
+    --ink: #e7e9ee;
+    --muted: #8b93a3;
+    --accent: #5aa9e6;      /* cool signal blue, not the terracotta default */
+    --accent-ink: #0c1218;
+    --danger: #e06a6a;
+    --ok: #63c088;
+    --radius: 6px;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--sans); font-size: 14px; line-height: 1.5;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; padding: 14px 22px; border-bottom: 1px solid var(--line);
+    background: var(--panel); position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: .2px; }
+  header .sub { color: var(--muted); font-size: 12px; font-family: var(--mono); }
+  .bar { display: flex; gap: 8px; align-items: center; }
+  main { max-width: 1000px; margin: 0 auto; padding: 24px 22px 80px; }
+
+  .status {
+    font-size: 12px; font-family: var(--mono); color: var(--muted);
+    padding: 2px 8px; border: 1px solid var(--line); border-radius: 20px;
+  }
+  .status.on  { color: var(--ok);    border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); }
+  .status.off { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
+
+  button {
+    font: inherit; cursor: pointer; border-radius: var(--radius);
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--ink);
+    padding: 7px 13px; transition: background .12s, border-color .12s;
+  }
+  button:hover { background: #2a2f3b; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  button.primary:hover { background: #6fb6ea; }
+  button.ghost { background: transparent; }
+  button.small { padding: 4px 9px; font-size: 12px; }
+  button.icon { padding: 4px 8px; color: var(--muted); }
+  button.icon:hover { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--line)); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+
+  section.card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); margin-bottom: 18px; overflow: hidden;
+  }
+  .card > h2 {
+    font-size: 13px; margin: 0; padding: 12px 16px; font-weight: 600;
+    border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .card > h2 .hint { font-weight: 400; color: var(--muted); font-size: 12px; }
+  .card .body { padding: 16px; }
+
+  .field { margin-bottom: 14px; }
+  .field:last-child { margin-bottom: 0; }
+  .field label { display: block; margin-bottom: 5px; font-size: 12px; color: var(--muted); }
+  .field label code { font-family: var(--mono); color: #b7c0d0; }
+  input[type=text], input[type=number], input[type=password], textarea, select {
+    width: 100%; font: inherit; color: var(--ink);
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 8px 10px;
+  }
+  input:focus, textarea:focus, select:focus {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+  textarea { resize: vertical; min-height: 66px; font-family: var(--mono); font-size: 13px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+
+  /* tag list (list_str) */
+  .taglist { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 20px; padding: 4px 6px 4px 12px; font-family: var(--mono); font-size: 13px;
+  }
+  .tag button { border: none; background: none; color: var(--muted); padding: 0 4px; line-height: 1; }
+  .tag button:hover { color: var(--danger); background: none; }
+  .addtag { display: flex; gap: 6px; margin-top: 12px; }
+  .addtag input { max-width: 240px; }
+
+  /* author table */
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-size: 11px; color: var(--muted); font-weight: 500; }
+  td input, td select { padding: 6px 8px; }
+  .authtable td:last-child, .authtable th:last-child { width: 40px; text-align: center; }
+
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--ink);
+    padding: 10px 18px; border-radius: var(--radius); font-size: 13px;
+    opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 50;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.err { border-color: var(--danger); color: #f0b6b6; }
+  .toast.ok  { border-color: var(--ok); }
+
+  /* modal */
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(6,8,12,.72);
+    display: none; align-items: center; justify-content: center; z-index: 100; padding: 20px;
+  }
+  .modal-bg.show { display: flex; }
+  .modal {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    width: 100%; max-width: 420px; padding: 22px;
+  }
+  .modal h3 { margin: 0 0 4px; font-size: 15px; }
+  .modal p.note { margin: 0 0 18px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .modal .row { display: flex; gap: 12px; }
+  .modal .actions { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; gap: 8px; }
+  .conn-result { font-size: 12px; font-family: var(--mono); min-height: 16px; }
+  .conn-result.ok { color: var(--ok); }
+  .conn-result.err { color: var(--danger); }
+  .empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+  .keystate { font-family: var(--mono); font-size: 11px; margin-left: 6px; }
+  .keystate.set { color: var(--ok); }
+  .keystate.unset { color: var(--danger); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>DigestPapers Config</h1>
+    <div class="sub">writes to postgres · table <code>config</code> · n8n reads on run</div>
+  </div>
+  <div class="bar">
+    <span id="connStatus" class="status off">disconnected</span>
+    <button class="ghost small" onclick="openConn()">Connection</button>
+    <button class="ghost small" onclick="reload()">Reload</button>
+    <button class="primary" id="saveBtn" onclick="save()">Save to database</button>
+  </div>
+</header>
+
+<main id="main">
+  <!-- Scalars -->
+  <section class="card">
+    <h2>Search &amp; scoring <span class="hint">edit values</span></h2>
+    <div class="body">
+      <div class="field">
+        <label for="keywordQuery"><code>keywordQuery</code> — SS + arXiv keyword search</label>
+        <textarea id="keywordQuery"></textarea>
+      </div>
+      <div class="field">
+        <label for="fields"><code>fields</code> — Semantic Scholar response fields</label>
+        <textarea id="fields"></textarea>
+      </div>
+      <div class="grid3">
+        <div class="field">
+          <label for="KEYWORD_MIN_SCORE"><code>KEYWORD_MIN_SCORE</code></label>
+          <input type="number" id="KEYWORD_MIN_SCORE">
+        </div>
+        <div class="field">
+          <label for="AUTHOR_MIN_SCORE"><code>AUTHOR_MIN_SCORE</code> — lower bar for followed authors</label>
+          <input type="number" id="AUTHOR_MIN_SCORE">
+        </div>
+        <div class="field">
+          <label for="daysBack"><code>daysBack</code> — set 2 for production</label>
+          <input type="number" id="daysBack">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Venues -->
+  <section class="card">
+    <h2>Venue whitelist <span class="hint">add / remove rows</span></h2>
+    <div class="body">
+      <div id="venueWhitelist" class="taglist"></div>
+      <div class="addtag">
+        <input type="text" id="venueWhitelist_new" placeholder="e.g. KDD" onkeydown="if(event.key==='Enter'){addTag('venueWhitelist');event.preventDefault();}">
+        <button class="small" onclick="addTag('venueWhitelist')">Add venue</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>OpenReview conferences <span class="hint">add / remove — expanded to current + previous year</span></h2>
+    <div class="body">
+      <div id="orConfs" class="taglist"></div>
+      <div class="addtag">
+        <input type="text" id="orConfs_new" placeholder="e.g. NeurIPS" onkeydown="if(event.key==='Enter'){addTag('orConfs');event.preventDefault();}">
+        <button class="small" onclick="addTag('orConfs')">Add conference</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Topics -->
+  <section class="card">
+    <h2>Topics <span class="hint">add / remove — author droplist</span></h2>
+    <div class="body">
+      <div id="topics" class="taglist"></div>
+      <div class="addtag">
+        <input type="text" id="topics_new" placeholder="e.g. nlp" onkeydown="if(event.key==='Enter'){addTag('topics');event.preventDefault();}">
+        <button class="small" onclick="addTag('topics')">Add topic</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Authors -->
+  <section class="card">
+    <h2>Followed authors <span class="hint">add / remove rows · edit any cell</span></h2>
+    <div class="body">
+      <table class="authtable">
+        <thead>
+          <tr><th>Name</th><th>Topic</th><th>arXiv name</th><th>ss_id <span style="color:#5a6272">(leave blank → resolver)</span></th><th></th></tr>
+        </thead>
+        <tbody id="authorsBody"></tbody>
+      </table>
+      <button class="small" style="margin-top:12px" onclick="addAuthor()">+ Add author</button>
+    </div>
+  </section>
+
+  <!-- Keys -->
+  <section class="card">
+    <h2>API keys <span class="hint">overwrites what n8n uses on next run</span></h2>
+    <div class="body">
+      <div class="field">
+        <label for="SS_API_KEY">Semantic Scholar API key <span id="ss_state" class="keystate"></span></label>
+        <input type="password" id="SS_API_KEY" placeholder="leave blank to keep current" autocomplete="off">
+      </div>
+
+      <hr style="border:none;border-top:1px solid var(--line);margin:18px 0">
+
+      <div class="grid2">
+        <div class="field">
+          <label for="LLM_PROVIDER">LLM provider</label>
+          <select id="LLM_PROVIDER" onchange="onProviderChange()">
+            <option value="deepseek">DeepSeek</option>
+            <option value="openai">OpenAI</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="LLM_BASE_URL">Base URL</label>
+          <input type="text" id="LLM_BASE_URL" placeholder="https://api.deepseek.com">
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="LLM_API_KEY">LLM API key <span id="llm_state" class="keystate"></span></label>
+        <input type="password" id="LLM_API_KEY" placeholder="leave blank to keep current" autocomplete="off">
+      </div>
+
+      <div class="field">
+        <label for="LLM_MODEL">Model</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="LLM_MODEL" style="flex:1"><option value="">— retrieve or type below —</option></select>
+          <button class="small" id="retrieveBtn" onclick="retrieveModels()">Retrieve models</button>
+        </div>
+        <input type="text" id="LLM_MODEL_manual" placeholder="…or type a model id manually" style="margin-top:8px"
+               oninput="if(this.value){document.getElementById('LLM_MODEL').value='';}">
+        <div id="modelHint" class="conn-result" style="margin-top:6px"></div>
+      </div>
+
+      <div class="field">
+        <label for="DISCORD_WEBHOOK">Discord webhook <span id="disc_state" class="keystate"></span></label>
+        <input type="password" id="DISCORD_WEBHOOK" placeholder="leave blank to keep current" autocomplete="off">
+      </div>
+
+      <button class="primary small" onclick="saveSecrets()">Save keys</button>
+      <span id="secretsMsg" class="conn-result" style="margin-left:10px"></span>
+    </div>
+  </section>
+</main>
+
+<!-- Connection popup -->
+<div class="modal-bg" id="connModal">
+  <div class="modal">
+    <h3>Postgres connection</h3>
+    <p class="note">
+      The n8n Postgres, inside Docker. If this app runs on the host, use the mapped port
+      (usually <code>localhost:5432</code>). Stored only in this browser (localStorage).
+    </p>
+    <div class="field">
+      <label>Host</label>
+      <input type="text" id="c_host" placeholder="localhost">
+    </div>
+    <div class="row">
+      <div class="field" style="flex:1">
+        <label>Port</label>
+        <input type="text" id="c_port" placeholder="5432">
+      </div>
+      <div class="field" style="flex:2">
+        <label>Database</label>
+        <input type="text" id="c_db" placeholder="n8n">
+      </div>
+    </div>
+    <div class="row">
+      <div class="field" style="flex:1">
+        <label>User</label>
+        <input type="text" id="c_user" placeholder="n8n">
+      </div>
+      <div class="field" style="flex:1">
+        <label>Password</label>
+        <input type="password" id="c_pass" placeholder="••••••">
+      </div>
+    </div>
+    <div class="conn-result" id="connResult"></div>
+    <div class="actions">
+      <button class="ghost small" onclick="clearCache()">Clear cache</button>
+      <div style="display:flex;gap:8px">
+        <button class="small" onclick="testConn()">Test</button>
+        <button class="primary small" onclick="saveConn()">Save &amp; connect</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const LS_KEY = 'digestpapers_pg_conn';
+let state = null;   // loaded config object
+
+// ---------- connection cache ----------
+function getConn() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY)); } catch { return null; }
+}
+function connHeaders() {
+  const c = getConn();
+  if (!c) return null;
+  return {
+    'X-PG-Host': c.host, 'X-PG-Port': c.port || '5432',
+    'X-PG-Db': c.db, 'X-PG-User': c.user, 'X-PG-Pass': c.pass || ''
+  };
+}
+function refreshConnBadge() {
+  const c = getConn();
+  const el = document.getElementById('connStatus');
+  if (c && c.host && c.db && c.user) {
+    el.textContent = `${c.user}@${c.host}:${c.port||5432}/${c.db}`;
+    el.className = 'status on';
+  } else {
+    el.textContent = 'disconnected';
+    el.className = 'status off';
+  }
+}
+function openConn() {
+  const c = getConn() || {};
+  c_host.value = c.host || 'localhost';
+  c_port.value = c.port || '5432';
+  c_db.value   = c.db   || 'n8n';
+  c_user.value = c.user || 'n8n';
+  c_pass.value = c.pass || '';
+  document.getElementById('connResult').textContent = '';
+  document.getElementById('connModal').classList.add('show');
+}
+function closeConn() { document.getElementById('connModal').classList.remove('show'); }
+function readConnForm() {
+  return { host: c_host.value.trim(), port: c_port.value.trim() || '5432',
+           db: c_db.value.trim(), user: c_user.value.trim(), pass: c_pass.value };
+}
+function saveConn() {
+  const c = readConnForm();
+  if (!c.host || !c.db || !c.user) { showConnResult('Host, database and user are required.', false); return; }
+  localStorage.setItem(LS_KEY, JSON.stringify(c));
+  refreshConnBadge();
+  closeConn();
+  reload();
+}
+function clearCache() {
+  localStorage.removeItem(LS_KEY);
+  refreshConnBadge();
+  showConnResult('Cache cleared.', true);
+  ['c_host','c_port','c_db','c_user','c_pass'].forEach(id => document.getElementById(id).value = '');
+}
+function showConnResult(msg, ok) {
+  const el = document.getElementById('connResult');
+  el.textContent = msg;
+  el.className = 'conn-result ' + (ok ? 'ok' : 'err');
+}
+async function testConn() {
+  const c = readConnForm();
+  const h = { 'X-PG-Host': c.host, 'X-PG-Port': c.port, 'X-PG-Db': c.db, 'X-PG-User': c.user, 'X-PG-Pass': c.pass };
+  showConnResult('Testing…', true);
+  try {
+    const r = await fetch('/api/config/test', { headers: h });
+    const j = await r.json();
+    if (j.ok) showConnResult('Connection OK.', true);
+    else showConnResult(j.error || 'Failed.', false);
+  } catch (e) { showConnResult('Request failed: ' + e.message, false); }
+}
+
+// ---------- toast ----------
+let toastT;
+function toast(msg, kind) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + (kind || '');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => el.className = 'toast', 2600);
+}
+
+// ---------- load / render ----------
+async function reload() {
+  const h = connHeaders();
+  if (!h) { toast('Set the Postgres connection first.', 'err'); openConn(); return; }
+  try {
+    const r = await fetch('/api/config', { headers: h });
+    const j = await r.json();
+    if (!r.ok) { toast(j.error || 'Load failed.', 'err'); return; }
+    state = j;
+    render();
+    await loadSecrets();
+    toast('Config loaded.', 'ok');
+  } catch (e) { toast('Request failed: ' + e.message, 'err'); }
+}
+
+function render() {
+  keywordQuery.value       = state.keywordQuery ?? '';
+  fields.value             = state.fields ?? '';
+  KEYWORD_MIN_SCORE.value  = state.KEYWORD_MIN_SCORE ?? 0;
+  AUTHOR_MIN_SCORE.value   = state.AUTHOR_MIN_SCORE ?? 0;
+  daysBack.value           = state.daysBack ?? 0;
+  renderTags('venueWhitelist');
+  renderTags('orConfs');
+  renderTags('topics');
+  renderAuthors();
+}
+
+function renderTags(key) {
+  const box = document.getElementById(key);
+  const arr = state[key] || [];
+  box.innerHTML = '';
+  if (arr.length === 0) box.innerHTML = '<span class="empty">None yet.</span>';
+  arr.forEach((v, i) => {
+    const t = document.createElement('span');
+    t.className = 'tag';
+    t.innerHTML = `<span></span><button title="Remove">×</button>`;
+    t.querySelector('span').textContent = v;
+    t.querySelector('button').onclick = () => { state[key].splice(i, 1); renderTags(key); refreshTopicSelects(key); };
+    box.appendChild(t);
+  });
+}
+function addTag(key) {
+  const inp = document.getElementById(key + '_new');
+  const v = inp.value.trim();
+  if (!v) return;
+  if (!state[key]) state[key] = [];
+  if (state[key].includes(v)) { toast('Already in the list.', 'err'); return; }
+  state[key].push(v);
+  inp.value = '';
+  renderTags(key);
+  refreshTopicSelects(key);
+}
+
+function renderAuthors() {
+  const body = document.getElementById('authorsBody');
+  body.innerHTML = '';
+  (state.authors || []).forEach((a, i) => {
+    const tr = document.createElement('tr');
+
+    const tdName = document.createElement('td');
+    tdName.appendChild(cell('text', a.name, v => state.authors[i].name = v));
+    const tdTopic = document.createElement('td');
+    tdTopic.appendChild(topicSelect(a.topic, v => state.authors[i].topic = v));
+    const tdArxiv = document.createElement('td');
+    tdArxiv.appendChild(cell('text', a.arxiv_name, v => state.authors[i].arxiv_name = v));
+    const tdSs = document.createElement('td');
+    tdSs.appendChild(cell('text', a.ss_id, v => state.authors[i].ss_id = v));
+    const tdDel = document.createElement('td');
+    const del = document.createElement('button');
+    del.className = 'icon'; del.textContent = '×'; del.title = 'Remove author';
+    del.onclick = () => { state.authors.splice(i, 1); renderAuthors(); };
+    tdDel.appendChild(del);
+
+    tr.append(tdName, tdTopic, tdArxiv, tdSs, tdDel);
+    body.appendChild(tr);
+  });
+}
+function cell(type, val, onchange) {
+  const inp = document.createElement('input');
+  inp.type = type; inp.value = val ?? '';
+  inp.oninput = () => onchange(inp.value);
+  return inp;
+}
+function topicSelect(val, onchange) {
+  const sel = document.createElement('select');
+  const topics = state.topics || [];
+  const opts = [...topics];
+  if (val && !opts.includes(val)) opts.unshift(val);  // keep unknown value visible
+  opts.forEach(t => {
+    const o = document.createElement('option');
+    o.value = t; o.textContent = t; if (t === val) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.onchange = () => onchange(sel.value);
+  return sel;
+}
+function refreshTopicSelects(key) {
+  if (key === 'topics') renderAuthors();  // topic list changed → rebuild droplists
+}
+function addAuthor() {
+  if (!state.authors) state.authors = [];
+  const firstTopic = (state.topics && state.topics[0]) || '';
+  state.authors.push({ name: '', topic: firstTopic, arxiv_name: '', ss_id: '' });
+  renderAuthors();
+}
+
+// ---------- save ----------
+function collect() {
+  return {
+    keywordQuery: keywordQuery.value,
+    fields: fields.value,
+    KEYWORD_MIN_SCORE: parseInt(KEYWORD_MIN_SCORE.value || '0', 10),
+    AUTHOR_MIN_SCORE: parseInt(AUTHOR_MIN_SCORE.value || '0', 10),
+    daysBack: parseInt(daysBack.value || '0', 10),
+    venueWhitelist: state.venueWhitelist || [],
+    orConfs: state.orConfs || [],
+    topics: state.topics || [],
+    authors: (state.authors || []).filter(a => (a.name || '').trim() !== ''),
+  };
+}
+async function save() {
+  const h = connHeaders();
+  if (!h) { toast('Set the Postgres connection first.', 'err'); openConn(); return; }
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { ...h, 'Content-Type': 'application/json' },
+      body: JSON.stringify(collect())
+    });
+    const j = await r.json();
+    if (r.ok) toast('Saved. n8n picks it up on next run.', 'ok');
+    else toast(j.error || 'Save failed.', 'err');
+  } catch (e) { toast('Request failed: ' + e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'Save to database'; }
+}
+
+// ---------- secrets / keys ----------
+const PROVIDER_BASE = { deepseek: 'https://api.deepseek.com', openai: 'https://api.openai.com/v1' };
+
+function setKeyState(spanId, isSet, masked) {
+  const el = document.getElementById(spanId);
+  if (isSet) { el.textContent = 'set · ' + (masked || ''); el.className = 'keystate set'; }
+  else { el.textContent = 'not set'; el.className = 'keystate unset'; }
+}
+
+async function loadSecrets() {
+  const h = connHeaders();
+  if (!h) return;
+  try {
+    const r = await fetch('/api/secrets', { headers: h });
+    const j = await r.json();
+    if (!r.ok) { toast(j.error || 'Secrets load failed.', 'err'); return; }
+    // settings (clear text)
+    document.getElementById('LLM_PROVIDER').value = j.LLM_PROVIDER || 'deepseek';
+    document.getElementById('LLM_BASE_URL').value = j.LLM_BASE_URL || PROVIDER_BASE[j.LLM_PROVIDER] || '';
+    // model: put stored one into the dropdown as the selected option
+    const sel = document.getElementById('LLM_MODEL');
+    sel.innerHTML = '';
+    const cur = j.LLM_MODEL || '';
+    const o = document.createElement('option');
+    o.value = cur; o.textContent = cur || '— retrieve or type below —'; o.selected = true;
+    sel.appendChild(o);
+    document.getElementById('LLM_MODEL_manual').value = '';
+    // secret states
+    setKeyState('ss_state',   j.SS_API_KEY?.is_set,      j.SS_API_KEY?.masked);
+    setKeyState('llm_state',  j.LLM_API_KEY?.is_set,     j.LLM_API_KEY?.masked);
+    setKeyState('disc_state', j.DISCORD_WEBHOOK?.is_set, j.DISCORD_WEBHOOK?.masked);
+    // clear the password inputs (blank = keep)
+    ['SS_API_KEY','LLM_API_KEY','DISCORD_WEBHOOK'].forEach(id => document.getElementById(id).value = '');
+  } catch (e) { toast('Secrets request failed: ' + e.message, 'err'); }
+}
+
+function onProviderChange() {
+  const p = document.getElementById('LLM_PROVIDER').value;
+  const base = document.getElementById('LLM_BASE_URL');
+  // only auto-fill base if empty or matches a known base (don't clobber custom)
+  if (!base.value || Object.values(PROVIDER_BASE).includes(base.value)) {
+    base.value = PROVIDER_BASE[p] || '';
+  }
+}
+
+async function retrieveModels() {
+  const h = connHeaders();
+  if (!h) { toast('Connect first.', 'err'); return; }
+  const provider = document.getElementById('LLM_PROVIDER').value;
+  const key = document.getElementById('LLM_API_KEY').value.trim();  // may be blank → server uses stored
+  const base = document.getElementById('LLM_BASE_URL').value.trim();
+  const hint = document.getElementById('modelHint');
+  const btn = document.getElementById('retrieveBtn');
+  btn.disabled = true; hint.className = 'conn-result ok'; hint.textContent = 'Fetching models…';
+  try {
+    const r = await fetch('/api/llm/models', {
+      method: 'POST',
+      headers: { ...h, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider, api_key: key, base_url: base })
+    });
+    const j = await r.json();
+    if (!r.ok || !j.ok) { hint.className = 'conn-result err'; hint.textContent = j.error || 'Failed.'; return; }
+    const sel = document.getElementById('LLM_MODEL');
+    const prev = sel.value;
+    sel.innerHTML = '';
+    j.models.forEach(m => {
+      const o = document.createElement('option'); o.value = m; o.textContent = m;
+      if (m === prev) o.selected = true;
+      sel.appendChild(o);
+    });
+    document.getElementById('LLM_MODEL_manual').value = '';
+    hint.className = 'conn-result ok'; hint.textContent = `${j.models.length} models. Pick one and save.`;
+  } catch (e) { hint.className = 'conn-result err'; hint.textContent = 'Request failed: ' + e.message; }
+  finally { btn.disabled = false; }
+}
+
+async function saveSecrets() {
+  const h = connHeaders();
+  if (!h) { toast('Connect first.', 'err'); return; }
+  const model = document.getElementById('LLM_MODEL_manual').value.trim()
+             || document.getElementById('LLM_MODEL').value;
+  const body = {
+    LLM_PROVIDER: document.getElementById('LLM_PROVIDER').value,
+    LLM_BASE_URL: document.getElementById('LLM_BASE_URL').value.trim(),
+    LLM_MODEL: model,
+    // secrets: blank means "keep current" (handled server-side)
+    SS_API_KEY: document.getElementById('SS_API_KEY').value,
+    LLM_API_KEY: document.getElementById('LLM_API_KEY').value,
+    DISCORD_WEBHOOK: document.getElementById('DISCORD_WEBHOOK').value,
+  };
+  const msg = document.getElementById('secretsMsg');
+  msg.className = 'conn-result ok'; msg.textContent = 'Saving…';
+  try {
+    const r = await fetch('/api/secrets', {
+      method: 'POST',
+      headers: { ...h, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const j = await r.json();
+    if (r.ok) { msg.className = 'conn-result ok'; msg.textContent = 'Saved.'; loadSecrets(); }
+    else { msg.className = 'conn-result err'; msg.textContent = j.error || 'Failed.'; }
+  } catch (e) { msg.className = 'conn-result err'; msg.textContent = 'Request failed: ' + e.message; }
+}
+
+// ---------- init ----------
+refreshConnBadge();
+if (getConn()) reload(); else openConn();
+</script>
+</body>
+</html>
