@@ -129,21 +129,25 @@
     },
     {
       "parameters": {
-        "url": "https://api.semanticscholar.org/graph/v1/paper/search",
+        "url": "https://api.semanticscholar.org/graph/v1/paper/search/bulk",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
             {
               "name": "query",
-              "value": "={{ $('Load Config').first().json.keywordQuery }}"
+              "value": "={{ $('Load Config').first().json.keywordQuery.split(/\\s+OR\\s+/i).map(t => '\"' + t.trim() + '\"').join(\" | \") }}"
             },
             {
               "name": "fields",
               "value": "={{ $('Load Config').first().json.fields }}"
             },
             {
+              "name": "sort",
+              "value": "publicationDate:desc"
+            },
+            {
               "name": "limit",
-              "value": "50"
+              "value": "100"
             }
           ]
         },
