@@ -14,10 +14,10 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.4,
       "position": [
-        -260,
+        -704,
         400
       ],
-      "id": "5269a301-5b44-4794-8983-05b66ea32685",
+      "id": "8f7bf564-3e0d-48d8-9c59-483e4f9a1385",
       "name": "Schedule Trigger"
     },
     {
@@ -29,10 +29,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.7,
       "position": [
-        -40,
+        -480,
         400
       ],
-      "id": "c0f1a2b3-load-cfg-db-0001",
+      "id": "d27485f3-b8b9-4daf-9fa8-15604173493f",
       "name": "Load Config (DB)",
       "credentials": {
         "postgres": {
@@ -48,10 +48,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        200,
+        -240,
         400
       ],
-      "id": "35050ccf-020f-488d-a483-c3662415d2c4",
+      "id": "f3c8c318-4d27-44ac-9b63-57cbc626b125",
       "name": "Load Config"
     },
     {
@@ -61,40 +61,15 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        440,
-        700
+        0,
+        704
       ],
-      "id": "a17d4e79-f27a-4102-8c54-7b5dc231cd3f",
+      "id": "d77eda3e-3d67-4a70-9205-3f256893d1c7",
       "name": "Split Authors"
     },
     {
       "parameters": {
-        "url": "http://export.arxiv.org/api/query",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "search_query",
-              "value": "cat:cs.LG AND (abs:\"integrated gradients\" OR abs:\"feature attribution\" OR abs:\"post-training quantization\" OR abs:\"model quantization\")"
-            },
-            {
-              "name": "start",
-              "value": "0"
-            },
-            {
-              "name": "max_results",
-              "value": "40"
-            },
-            {
-              "name": "sortBy",
-              "value": "submittedDate"
-            },
-            {
-              "name": "sortOrder",
-              "value": "descending"
-            }
-          ]
-        },
+        "url": "=http://export.arxiv.org/api/query?search_query={{ encodeURIComponent('cat:cs.LG AND (' + ($('Load Config').first().json.keywordQuery || '').split(/\\s+OR\\s+/i).map(t => t.trim()).filter(Boolean).map(t => 'abs:\"' + t + '\"').join(' OR ') + ')') }}&start=0&max_results=40&sortBy=submittedDate&sortOrder=descending",
         "options": {
           "response": {
             "response": {
@@ -106,10 +81,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
-        440,
+        0,
         0
       ],
-      "id": "0be800ba-cc36-44d7-8ae2-82f158c6b749",
+      "id": "ef0981d6-32ab-4d59-ad83-a5c2eb9aaef2",
       "name": "arXiv Keyword",
       "retryOnFail": true,
       "waitBetweenTries": 2000
@@ -121,80 +96,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        660,
+        224,
         0
       ],
-      "id": "9962d5ed-acfd-4820-a260-58b034b0db32",
+      "id": "39894bea-f4ec-48ac-b9b7-4b7017e8b436",
       "name": "Norm arXiv Keyword"
-    },
-    {
-      "parameters": {
-        "url": "https://api.semanticscholar.org/graph/v1/paper/search/bulk",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "query",
-              "value": "={{ $('Load Config').first().json.keywordQuery.split(/\\s+OR\\s+/i).map(t => '\"' + t.trim() + '\"').join(\" | \") }}"
-            },
-            {
-              "name": "fields",
-              "value": "={{ $('Load Config').first().json.fields }}"
-            },
-            {
-              "name": "sort",
-              "value": "publicationDate:desc"
-            },
-            {
-              "name": "limit",
-              "value": "100"
-            }
-          ]
-        },
-        "options": {
-          "batching": {
-            "batch": {
-              "batchSize": 1,
-              "batchInterval": 2500
-            }
-          }
-        },
-        "sendHeaders": true,
-        "specifyHeaders": "keypair",
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "x-api-key",
-              "value": "={{ $('Load Config').first().json.SS_API_KEY }}"
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.5,
-      "position": [
-        440,
-        150
-      ],
-      "id": "74884512-4a47-4127-b257-488b11cba490",
-      "name": "SS Keyword",
-      "retryOnFail": true,
-      "waitBetweenTries": 8000,
-      "onError": "continueRegularOutput",
-      "maxTries": 4
-    },
-    {
-      "parameters": {
-        "jsCode": "const items = $input.first().json.data || [];\nreturn items.map(p => {\n  const arxiv = p.externalIds?.ArXiv || null;\n  const doi = p.externalIds?.DOI || null;\n  const dedup_key = arxiv ? `arxiv:${arxiv}` : doi ? `doi:${doi}` : `ss:${p.paperId}`;\n  return { json: {\n    dedup_key, arxiv_id:arxiv, doi, semantic_scholar_id:p.paperId,\n    title:p.title, authors:(p.authors||[]).map(a=>a.name).join(\", \"),\n    abstract:p.abstract||p.tldr?.text||\"\", url:p.url, pdf_url:p.openAccessPdf?.url||null,\n    published_at:p.publicationDate, venue:p.venue||\"\", source:\"ss_keyword\", min_score:7\n  }};\n});"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        660,
-        150
-      ],
-      "id": "732244da-41eb-4cdb-b5eb-1e323d33e60a",
-      "name": "Norm SS Keyword"
     },
     {
       "parameters": {
@@ -212,16 +118,7 @@
             }
           ]
         },
-        "options": {
-          "batching": {
-            "batch": {
-              "batchSize": 1,
-              "batchInterval": 2500
-            }
-          }
-        },
         "sendHeaders": true,
-        "specifyHeaders": "keypair",
         "headerParameters": {
           "parameters": [
             {
@@ -229,20 +126,28 @@
               "value": "={{ $('Load Config').first().json.SS_API_KEY }}"
             }
           ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2500
+            }
+          }
         }
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
-        2200,
-        620
+        1760,
+        624
       ],
-      "id": "d9e8e138-388c-43c5-ac62-07e46711cb9f",
+      "id": "cebe075f-93ce-40db-951d-041654cbadf0",
       "name": "SS Author Papers",
       "retryOnFail": true,
       "waitBetweenTries": 8000,
-      "onError": "continueRegularOutput",
-      "maxTries": 4
+      "maxTries": 4,
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -251,90 +156,23 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2420,
-        620
+        1984,
+        624
       ],
-      "id": "f56e2fb8-3f2a-4f00-a7ae-395ce7bce2b0",
+      "id": "e85d8990-a50f-4501-893e-6139b59be76d",
       "name": "Norm SS Author"
     },
     {
       "parameters": {
-        "url": "http://export.arxiv.org/api/query",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "search_query",
-              "value": "=au:\"{{ $json.arxiv_name || $json.name }}\" AND (cat:cs.LG OR cat:cs.CV OR cat:cs.AI OR cat:cs.CL OR cat:cs.NE OR cat:stat.ML OR cat:cs.AR OR cat:cs.DC OR cat:eess.SY)"
-            },
-            {
-              "name": "start",
-              "value": "0"
-            },
-            {
-              "name": "max_results",
-              "value": "20"
-            },
-            {
-              "name": "sortBy",
-              "value": "submittedDate"
-            },
-            {
-              "name": "sortOrder",
-              "value": "descending"
-            }
-          ]
-        },
-        "options": {
-          "response": {
-            "response": {
-              "responseFormat": "text"
-            }
-          },
-          "batching": {
-            "batch": {
-              "batchSize": 1,
-              "batchInterval": 3100
-            }
-          }
-        }
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.5,
-      "position": [
-        2200,
-        820
-      ],
-      "id": "10373e4b-305f-42e9-b5c9-73537b14139f",
-      "name": "arXiv Author",
-      "retryOnFail": true,
-      "waitBetweenTries": 2000
-    },
-    {
-      "parameters": {
-        "jsCode": "// Run Once for All Items. Author name is parsed from each feed's own <title>\n// (search_query=au:\"NAME\" ...), so verification never depends on index alignment.\nconst minScore = $('Load Config').first().json.AUTHOR_MIN_SCORE;\nfunction norm(s){return (s||'').normalize('NFKD').replace(/[\\u0300-\\u036f]/g,'')\n  .toLowerCase().replace(/[^a-z\\s]/g,' ').replace(/\\s+/g,' ').trim();}\n\nconst out = [];\nfor (const it of $input.all()) {\n  const text = it.json.data || \"\";\n  // pull the queried author name out of the feed title\n  const qm = text.match(/search_query=au:(?:%22|\")([^\"%]+)(?:%22|\")/i);\n  const wantName = qm ? decodeURIComponent(qm[1].replace(/\\+/g,' ')) : '';\n  const wantTokens = new Set(norm(wantName).split(' ').filter(Boolean));\n  const wantLast = [...wantTokens].pop();\n\n  const entries = text.split(\"<entry>\").slice(1);\n  for (const e of entries) {\n    const g=(t)=>{const m=e.match(new RegExp(\"<\"+t+\"[^>]*>([\\\\s\\\\S]*?)</\"+t+\">\"));return m?m[1].trim():\"\";};\n    const idUrl=g(\"id\"); const m=idUrl.match(/abs\\/([^v]+)(v\\d+)?/); const arxiv=m?m[1]:null;\n    const title=g(\"title\").replace(/\\s+/g,\" \"); const abstract=g(\"summary\").replace(/\\s+/g,\" \");\n    const pub=g(\"published\").slice(0,10);\n    const names=[...e.matchAll(/<name[^>]*>([\\s\\S]*?)<\\/name>/g)].map(x=>x[1].trim());\n\n    let ok = !wantLast; // if we couldn't parse a name, don't over-filter\n    if(wantLast){\n      for(const nm of names){\n        const nt=new Set(norm(nm).split(' ').filter(Boolean));\n        if(!nt.has(wantLast)) continue;\n        let sh=0; for(const t of wantTokens) if(nt.has(t)) sh++;\n        if(sh>=Math.min(2,wantTokens.size)){ ok=true; break; }\n      }\n    }\n    if(!ok) continue;\n\n    const dedup_key = arxiv?`arxiv:${arxiv}`:`arxivurl:${idUrl}`;\n    out.push({json:{dedup_key,arxiv_id:arxiv,doi:null,semantic_scholar_id:null,\n      title,authors:names.join(\", \"),abstract,url:idUrl,\n      pdf_url:arxiv?`https://arxiv.org/pdf/${arxiv}`:null,published_at:pub,\n      venue:\"arXiv\",source:`arxiv_author:${wantName||'unknown'}`,min_score:minScore}});\n  }\n}\nreturn out;\n"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2420,
-        820
-      ],
-      "id": "ab1ecee7-cb65-4e07-b436-af642a8d7e7a",
-      "name": "Norm arXiv Author"
-    },
-    {
-      "parameters": {
-        "numberInputs": 4,
-        "options": {}
+        "numberInputs": 2
       },
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
       "position": [
-        1200,
-        300
+        768,
+        304
       ],
-      "id": "1f885b3e-5630-407f-9a55-09e365fbd86b",
+      "id": "e69e7579-7ada-4d78-b93c-f2f398ffce86",
       "name": "Merge Sources"
     },
     {
@@ -344,10 +182,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1420,
-        300
+        992,
+        304
       ],
-      "id": "5f5278d2-0f02-406f-b2d7-079e10859939",
+      "id": "97e93993-3cbf-483c-910d-40547855b875",
       "name": "Dedup In Batch"
     },
     {
@@ -361,10 +199,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.7,
       "position": [
-        1640,
-        300
+        1200,
+        304
       ],
-      "id": "2dec78aa-dced-446c-a8b3-21a5e5c4d2bc",
+      "id": "4c60bc46-7898-4e79-ba13-c996d21b10a1",
       "name": "Dedup Check",
       "credentials": {
         "postgres": {
@@ -382,10 +220,10 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
       "position": [
-        1860,
-        300
+        1424,
+        304
       ],
-      "id": "2a78c43b-05dd-4145-835a-b51abb54b61c",
+      "id": "a894f88e-c1af-4263-b01b-3463ae0b6bf9",
       "name": "Merge Dedup Flag"
     },
     {
@@ -393,6 +231,7 @@
         "conditions": {
           "options": {
             "caseSensitive": true,
+            "leftValue": "",
             "typeValidation": "strict",
             "version": 3
           },
@@ -415,10 +254,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        2080,
-        300
+        1648,
+        304
       ],
-      "id": "07ba1aa2-fc35-48cd-90b4-848114625fc0",
+      "id": "49f8e4fd-0262-4556-8a87-8ad6689e4fc1",
       "name": "Filter New Papers"
     },
     {
@@ -428,22 +267,17 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2300,
-        300
+        1872,
+        304
       ],
-      "id": "7fcfa481-b7b3-4626-810f-60f8d0957b1c",
+      "id": "220b80e9-bcb0-49c4-96ef-e1696a91a20b",
       "name": "Build Filter Prompt"
     },
     {
       "parameters": {
         "method": "POST",
         "url": "={{ $('Load Config').first().json.LLM_BASE_URL }}/chat/completions",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  model: $('Load Config').first().json.LLM_MODEL,\n  messages: [\n    { role: \"system\", content: \"Bạn là bộ lọc độ liên quan cho hai chủ đề: (1) explainable AI / integrated gradients / feature attribution; (2) model quantization / post-training quantization / neural network efficiency. Chỉ trả JSON thuần không markdown: {\\\"relevance\\\": 0-10, \\\"topic\\\": \\\"quant\\\"|\\\"xai\\\"|\\\"other\\\", \\\"reason\\\": \\\"ngắn gọn\\\", \\\"should_read_full_paper\\\": true/false}. topic=quant cho quantization/compression/efficient inference; topic=xai cho explainability/feature attribution/interpretability; other nếu không rõ.\" },\n    { role: \"user\", content: $json.prompt }\n  ],\n  response_format: { type: \"json_object\" },\n  temperature: 0.2\n}) }}",
-        "options": {},
         "sendHeaders": true,
-        "specifyHeaders": "keypair",
         "headerParameters": {
           "parameters": [
             {
@@ -451,15 +285,19 @@
               "value": "=Bearer {{ $('Load Config').first().json.LLM_API_KEY }}"
             }
           ]
-        }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: $('Load Config').first().json.LLM_MODEL,\n  messages: [\n    { role: \"system\", content: \"Bạn là bộ lọc độ liên quan cho hai chủ đề: (1) explainable AI / integrated gradients / feature attribution; (2) model quantization / post-training quantization / neural network efficiency. Chỉ trả JSON thuần không markdown: {\\\"relevance\\\": 0-10, \\\"topic\\\": \\\"quant\\\"|\\\"xai\\\"|\\\"other\\\", \\\"reason\\\": \\\"ngắn gọn\\\", \\\"should_read_full_paper\\\": true/false}. topic=quant cho quantization/compression/efficient inference; topic=xai cho explainability/feature attribution/interpretability; other nếu không rõ.\" },\n    { role: \"user\", content: $json.prompt }\n  ],\n  response_format: { type: \"json_object\" },\n  temperature: 0.2\n}) }}",
+        "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
-        2520,
-        300
+        2080,
+        304
       ],
-      "id": "c62ca24f-be23-46dc-aa2c-e18e26882166",
+      "id": "3a160dc1-1c11-4dff-86c1-a63a7d0f3387",
       "name": "LLM Relevance Filter",
       "retryOnFail": true,
       "waitBetweenTries": 2000
@@ -471,10 +309,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2740,
-        300
+        2304,
+        304
       ],
-      "id": "673c4b52-903d-4ee2-bd0c-82ac8fd7f406",
+      "id": "be24869c-f0fe-40cb-96db-cd4ae0672a4d",
       "name": "Parse Relevance"
     },
     {
@@ -482,6 +320,7 @@
         "conditions": {
           "options": {
             "caseSensitive": true,
+            "leftValue": "",
             "typeValidation": "strict",
             "version": 3
           },
@@ -503,22 +342,17 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        2960,
-        300
+        2528,
+        304
       ],
-      "id": "716f1c58-f97d-4433-bcd1-120c14745da8",
+      "id": "606e8141-796b-4ece-892a-0343786b1b62",
       "name": "Filter By Score"
     },
     {
       "parameters": {
         "method": "POST",
         "url": "={{ $('Load Config').first().json.LLM_BASE_URL }}/chat/completions",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ {\n  model: $('Load Config').first().json.LLM_MODEL,\n  messages: [\n    { role: \"system\", content: \"You are a research analyst. Read the paper and return a concise summary in English with: 1) TL;DR (max 3 sentences) 2) Problem 3) Main idea 4) Method 5) Key results 6) What's new 7) Limitations 8) Why it matters for explainable AI / integrated gradients or model quantization / neural network efficiency. Only state what is supported by the paper.\" },\n    { role: \"user\", content: \"Title: \" + $json.title + \"\\nAbstract: \" + $json.abstract }\n  ],\n  temperature: 0.3\n} }}",
-        "options": {},
         "sendHeaders": true,
-        "specifyHeaders": "keypair",
         "headerParameters": {
           "parameters": [
             {
@@ -526,15 +360,19 @@
               "value": "=Bearer {{ $('Load Config').first().json.LLM_API_KEY }}"
             }
           ]
-        }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  model: $('Load Config').first().json.LLM_MODEL,\n  messages: [\n    { role: \"system\", content: \"You are a research analyst. Read the paper and return a concise summary in English with: 1) TL;DR (max 3 sentences) 2) Problem 3) Main idea 4) Method 5) Key results 6) What's new 7) Limitations 8) Why it matters for explainable AI / integrated gradients or model quantization / neural network efficiency. Only state what is supported by the paper.\" },\n    { role: \"user\", content: \"Title: \" + $json.title + \"\\nAbstract: \" + $json.abstract }\n  ],\n  temperature: 0.3\n} }}",
+        "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
-        3180,
-        300
+        2752,
+        304
       ],
-      "id": "a25479b7-57be-4311-be73-e83d44a9c853",
+      "id": "295891cf-0867-467d-b6e2-fdc32c792a0e",
       "name": "LLM Summary",
       "retryOnFail": true,
       "waitBetweenTries": 2000
@@ -546,25 +384,25 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3400,
-        300
+        2960,
+        304
       ],
-      "id": "1a1b61df-8796-4366-976f-31272ce27ed0",
+      "id": "a4c70051-6233-489f-9c3d-e36f1d3eb6cd",
       "name": "Parse Summary"
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "={{ $json._sql }}",
+        "query": "{{ $json._sql }}",
         "options": {}
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.7,
       "position": [
-        3620,
-        300
+        3184,
+        304
       ],
-      "id": "b1c59780-b3f9-4f3c-a1c8-cffe690a5905",
+      "id": "6478623e-b3b9-47c9-a3d8-e8feddafd0b6",
       "name": "Insert Papers",
       "credentials": {
         "postgres": {
@@ -580,10 +418,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3840,
-        300
+        3408,
+        304
       ],
-      "id": "a83250ee-abcb-40d2-8a4b-5d20908aa01c",
+      "id": "c6e8d5e7-9e3c-4090-b7a7-2f2db19e2c0b",
       "name": "Build Discord Messages"
     },
     {
@@ -611,10 +449,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
-        4060,
-        300
+        3632,
+        304
       ],
-      "id": "21af2654-30b1-4ac3-bf21-1c43a1336c89",
+      "id": "4be3daef-3d2b-4695-b4fb-09456eeed645",
       "name": "Send Discord"
     },
     {
@@ -624,13 +462,14 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3070,
-        300
+        2640,
+        304
       ],
-      "id": "23eb6470-0657-4841-b646-6b8bf72a1874",
+      "id": "36f71813-8b0b-44b9-8290-a161043835b0",
       "name": "Select Top 5 Per Topic"
     }
   ],
+  "pinData": {},
   "connections": {
     "Schedule Trigger": {
       "main": [
@@ -655,11 +494,6 @@
             "node": "arXiv Keyword",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "SS Keyword",
-            "type": "main",
-            "index": 0
           }
         ]
       ]
@@ -669,11 +503,6 @@
         [
           {
             "node": "SS Author Papers",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "arXiv Author",
             "type": "main",
             "index": 0
           }
@@ -691,33 +520,11 @@
         ]
       ]
     },
-    "SS Keyword": {
-      "main": [
-        [
-          {
-            "node": "Norm SS Keyword",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "SS Author Papers": {
       "main": [
         [
           {
             "node": "Norm SS Author",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "arXiv Author": {
-      "main": [
-        [
-          {
-            "node": "Norm arXiv Author",
             "type": "main",
             "index": 0
           }
@@ -735,35 +542,13 @@
         ]
       ]
     },
-    "Norm SS Keyword": {
-      "main": [
-        [
-          {
-            "node": "Merge Sources",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
     "Norm SS Author": {
       "main": [
         [
           {
             "node": "Merge Sources",
             "type": "main",
-            "index": 2
-          }
-        ]
-      ]
-    },
-    "Norm arXiv Author": {
-      "main": [
-        [
-          {
-            "node": "Merge Sources",
-            "type": "main",
-            "index": 3
+            "index": 1
           }
         ]
       ]
@@ -939,14 +724,16 @@
       ]
     }
   },
-  "pinData": {},
+  "active": false,
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "active": false,
-  "versionId": "aaafc74a-c6e1-4b73-96da-2dd3f2458ab0",
-  "meta": {},
-  "id": "7c70fbd1-76ec-4fc3-a14e-2bcb220d9324",
+  "versionId": "4adb8bcb-33d2-45db-ad4c-70107778ce32",
+  "meta": {
+    "instanceId": "12bf601088683c6c83aa698356a308b5582834a18bf43eef78da7224d9b61ef5"
+  },
+  "nodeGroups": [],
+  "id": "OtTrYFyVxAs6BCFA",
   "tags": []
 }
